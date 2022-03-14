@@ -1,0 +1,10 @@
+#
+# trace08.txt - Send SIGINT twice when there is a foreground job.
+#
+/bin/echo  $SUITE/programs/delayed_echo 4 do not print
+$SUITE/programs/delayed_echo 4 do not print
+
+SLEEP 2
+INT
+INT
+SLEEP 3

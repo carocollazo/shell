@@ -1,0 +1,15 @@
+#
+# trace16.txt - Send SIGINT only to foreground job, then do it again
+#
+/bin/echo $SUITE/programs/mypid 4 [bg]
+$SUITE/programs/33sh_to_file ./inttest16.txt $SUITE/programs/mypid 4 &
+
+/bin/echo $SUITE/programs/mypid 5
+$SUITE/programs/33sh_append_file ./inttest16.txt $SUITE/programs/mypid 5
+
+SLEEP 1
+INT
+INT
+
+$SUITE/programs/check_process_state ./inttest16.txt
+/bin/rm ./inttest16.txt
