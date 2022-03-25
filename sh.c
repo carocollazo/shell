@@ -606,7 +606,7 @@ void redirection(char *toks[])
         /* if toks[i] is NULL */
         if (toks[i] == NULL)
         {
-            i = MAX_SIZE / 2; // break for loop
+            break;
         }
         /* if toks[i] is NOT a redirection */
         if ((strcmp(toks[i], input) != 0) && (strcmp(toks[i], output) != 0) && (strcmp(toks[i], append) != 0))
