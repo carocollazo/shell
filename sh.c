@@ -34,14 +34,12 @@ int main()
 
     j_list = init_job_list();
 
-    memset(buff, '\0', MAX_SIZE); /* instantiate buffer */
-
     ignore_signals(); /* ignore signals in parent */
 
     while (1)
     {
-        // CLEAN toks argv redPaths buffer ?????
         reap(); 
+        memset(buff, '\0', MAX_SIZE); /* instantiate buffer */
 #ifdef PROMPT
         const void *prompt;  /* pointer to the shell prompt "33sh> " */
         prompt = "33sh> ";
@@ -109,24 +107,14 @@ void reap()
 {
     int w; /* waitpid return value */
     int status;
-    pid_t child_pid; /* child process ID */
     int child_jid; /* child process job ID */
 
     /* while the end of job list is NOT reached */
     while ((w = waitpid(-1, &status, WNOHANG | WUNTRACED | WCONTINUED)) > 0)
     {
-        /* if waitpid fails to return process ID of the terminated child */
-        if (w == -1)
-        {
-            perror("waitpid");
-            return;
-        }
-
-        /* if waiting for any child with a process ID equal to w */
-        child_pid = (pid_t)w;
-        
-        if ((child_jid = get_job_jid(j_list, child_pid)) < 0) {
-            fprintf(stderr, "%s\n", "ERROR : get_job_jid failed."); // fprintf check for failure ???
+        /* if waiting for any child with a process ID equal to w */        
+        if ((child_jid = get_job_jid(j_list, (pid_t)w)) == -1) {
+            fprintf(stderr, "%s\n", "ERROR : get_job_jid failed."); 
             /* if fflush fails */
             if (fflush(stdout) < 0) {
                 perror("fflush");
@@ -138,7 +126,7 @@ void reap()
         /* if process terminates normally with exit */
         if (WIFEXITED(status))
         {
-            printf("[%d] (%d) terminated with exit status %d\n", child_jid, child_pid, WEXITSTATUS(status));
+            printf("[%d] (%d) terminated with exit status %d\n", child_jid, w, WEXITSTATUS(status));
             /* if remove_job_jid fails */
             if (remove_job_jid(j_list, child_jid) == -1)
             {
@@ -154,7 +142,7 @@ void reap()
         /* if process is terminated by unhandled signal */
         if (WIFSIGNALED(status))
         {
-            printf("[%d] (%d) terminated by signal %d\n", child_jid, child_pid, WTERMSIG(status));
+            printf("[%d] (%d) terminated by signal %d\n", child_jid, w, WTERMSIG(status));
             /* if remove_job_jid fails */
             if (remove_job_jid(j_list, child_jid) == -1)
             {
@@ -170,7 +158,7 @@ void reap()
         /* if process is stopped */
         if (WIFSTOPPED(status))
         {
-            printf("[%d] (%d) suspended with exit status %d\n", child_jid, child_pid, WSTOPSIG(status));
+            printf("[%d] (%d) suspended by signal %d\n", child_jid, w, WSTOPSIG(status));
             /* if update_job_jid fails */
             if (update_job_jid(j_list, child_jid, STOPPED) == -1)
             {
@@ -186,7 +174,7 @@ void reap()
         /* if process is resumed */
         if (WIFCONTINUED(status))
         {
-            printf("[%d] (%d) resumed\n", child_jid, child_pid);
+            printf("[%d] (%d) resumed\n", child_jid, w);
             /* if update_job_jid fails */
             if (update_job_jid(j_list, child_jid, RUNNING) == -1)
             {
@@ -200,6 +188,12 @@ void reap()
             }
         }
     }
+    /* if waitpid fails to return process ID of the terminated child */
+    // if (w == -1)
+    // {
+    //     perror("waitpid");
+    //     return;
+    // }
     return;
 }
 
@@ -255,6 +249,7 @@ void commands(char *toks[])
     if (!strcmp(toks[0], "cd"))
     {
         cd(toks);
+        return;
     }
     /* if command is link (ln) */
     else if (!strcmp(toks[0], "ln"))
@@ -393,7 +388,7 @@ void bg(char *toks[])
     /* if the second element in toks is null */
     if (toks[1] == NULL)
     {
-        fprintf(stderr, "%s\n", "SYNTAX ERROR : Background (bg) failed.");
+        fprintf(stderr, "%s\n", "SYNTAX ERROR : Background command (bg) failed.");
         /* if fflush fails */
         if (fflush(stdout) < 0) {
             perror("fflush");
@@ -440,7 +435,7 @@ void bg(char *toks[])
         }
         return;
     }
-    /* if kill fails */
+    /* if update_job_jid fails */
     if (update_job_jid(j_list, child_jid, RUNNING) == -1)
     {
         fprintf(stderr, "%s\n", "ERROR : update_job_jid failed.");
@@ -471,7 +466,7 @@ void fg(char *toks[])
     /* if the second element in toks is null */
     if (toks[1] == NULL)
     {
-        fprintf(stderr, "%s\n", "SYNTAX ERROR : Foreground (fg) failed.");
+        fprintf(stderr, "%s\n", "SYNTAX ERROR : Foreground command (fg) failed.");
         /* if fflush fails */
         if (fflush(stdout) < 0) {
             perror("fflush");
@@ -493,7 +488,7 @@ void fg(char *toks[])
         return;
     }
 
-    child_jid = atoi(toks[1] + 1); /* converts ptr to int */ 
+    child_jid = atoi(strrchr(toks[1], '%') + 1); /* converts ptr to int */ 
     /* if get_job_pid fails */
     if ((child_pid = get_job_pid(j_list, child_jid)) == -1)
     {
@@ -532,15 +527,13 @@ void fg(char *toks[])
     // {
     //     return;
     // }
-
-    child_pid = (pid_t)w;
     
     /* if child process is terminated because of an unhandled signal */
     if (WIFSIGNALED(status))
     {
-        printf("[%d] (%d) terminated by signal %d\n", child_jid, child_pid, WTERMSIG(status));
+        printf("[%d] (%d) terminated by signal %d\n", child_jid, w, WTERMSIG(status));
         /* if remove_job_pid fails */
-        if (remove_job_pid(j_list, child_jid) == -1)
+        if (remove_job_jid(j_list, child_jid) == -1)
         {
             fprintf(stderr, "%s\n", "ERROR : remove_job_pid failed.");
             /* if fflush fails */
@@ -550,14 +543,32 @@ void fg(char *toks[])
                 cleanup_job_list(j_list);
                 exit(EXIT_FAILURE); /* exit(1) */
             }
+            return;
+        }
+    }
+    /* if child process is exited */
+    if (WIFEXITED(status))
+    {
+        /* if remove_job_pid fails */
+        if (remove_job_jid(j_list, child_jid) == -1)
+        {
+            fprintf(stderr, "%s\n", "ERROR : remove_job_pid failed.");
+            /* if fflush fails */
+            if (fflush(stdout) < 0) 
+            {
+                perror("fflush");
+                cleanup_job_list(j_list);
+                exit(EXIT_FAILURE); /* exit(1) */
+            }
+            return;
         }
     }
     /* if child process is stopped */
     if (WIFSTOPPED(status))
     {
-        printf("[%d] (%d) suspended by signal %d\n", child_jid, child_pid, WSTOPSIG(status));
+        printf("[%d] (%d) suspended by signal %d\n", child_jid, w, WSTOPSIG(status));
         /* if update_job_pid fails */
-        if (update_job_pid(j_list, child_pid, STOPPED) == -1)
+        if (update_job_jid(j_list, child_jid, STOPPED) == -1)
         {
             fprintf(stderr, "%s\n", "ERROR : update_job_pid failed.");
             /* if fflush fails */
@@ -567,10 +578,10 @@ void fg(char *toks[])
                 cleanup_job_list(j_list);
                 exit(EXIT_FAILURE); /* exit(1) */
             }
+            return;
         }
     }
     /* if tcsetpgrp fails */
-    // if (tcsetpgrp(STDIN_FILENO, getpgrp()) == -1)
     if (tcsetpgrp(STDIN_FILENO, getpgid(0)) == -1)
     {
         perror("tcsetpgrp");
@@ -614,7 +625,7 @@ void redirection(char *toks[])
             /* argv did NOT raise flag */
             if (!argv_flag)
             {
-                argv[argv_index++] = toks[i];
+                argv[argv_index] = toks[i];
             }
             argv_flag = 0;
         }
@@ -636,6 +647,7 @@ void redirection(char *toks[])
                         cleanup_job_list(j_list);
                         exit(EXIT_FAILURE); /* exit(1) */
                     }
+                    return;
                 }
                 /* if the next token is NULL (NO input file) */
                 else if (toks[i + 1] == NULL)
@@ -648,6 +660,7 @@ void redirection(char *toks[])
                         cleanup_job_list(j_list);
                         exit(EXIT_FAILURE); /* exit(1) */
                     }
+                    return;
                 }
                 /* if next file is the input, output or append symbol (two consecutive redirection symbols) */
                 else if (!strcmp(toks[i + 1], input) || !strcmp(toks[i + 1], output) || !strcmp(toks[i + 1], append))
@@ -660,6 +673,7 @@ void redirection(char *toks[])
                         cleanup_job_list(j_list);
                         exit(EXIT_FAILURE); /* exit(1) */
                     }
+                    return;
                 }
 
                 in_flag = 1;
@@ -667,7 +681,7 @@ void redirection(char *toks[])
                 in_path = toks[i + 1];
             }
             /* if toks[i] is output or append symbol */
-            if (!strcmp(toks[i], output) || !strcmp(toks[i], append))
+            else if (!strcmp(toks[i], output) || !strcmp(toks[i], append))
             {
                 /* if toks[i] is output symbol */
                 if (out_flag)
@@ -680,6 +694,7 @@ void redirection(char *toks[])
                         cleanup_job_list(j_list);
                         exit(EXIT_FAILURE); /* exit(1) */
                     }
+                    return;
                 }
                 /* if the next token is NULL (NO output file) */
                 else if (toks[i + 1] == NULL)
@@ -692,6 +707,7 @@ void redirection(char *toks[])
                         cleanup_job_list(j_list);
                         exit(EXIT_FAILURE); /* exit(1) */
                     }
+                    return;
                 }
                 /* if next file is the input, output or append symbol (two consecutive redirection symbols) */
                 else if (!strcmp(toks[i + 1], input) || !strcmp(toks[i + 1], output) || !strcmp(toks[i + 1], append))
@@ -704,6 +720,7 @@ void redirection(char *toks[])
                         cleanup_job_list(j_list);
                         exit(EXIT_FAILURE); /* exit(1) */
                     }
+                    return;
                 }
 
                 out_flag = 1;
@@ -711,7 +728,16 @@ void redirection(char *toks[])
                 out_path = toks[i + 1];
             }
         }
+        argv_index++;
     }
+
+    argv[argv_index] = '\0';
+
+    if (open(argv[0], O_RDONLY) == -1) {
+        perror("open");\
+        return;
+    }
+
     fork_and_exec(argv, argv_index, in_symbol, out_symbol, in_path, out_path);
     return;
 }
@@ -739,8 +765,10 @@ void fork_and_exec(char *argv[], int argv_len, char *in_symbol, char *out_symbol
     if (!strcmp(argv[argv_len - 1], "&"))
     {
         is_bg = 1;
-        argv[argv_len - 1] = "\0";
+        argv[argv_len - 1] = '\0';
     }
+
+    char path[strlen(argv[0])];
 
     /* if fork fails */
     if ((f = fork()) == -1)
@@ -751,7 +779,6 @@ void fork_and_exec(char *argv[], int argv_len, char *in_symbol, char *out_symbol
     /* if child process is created */
     else if (!f)
     {
-        restore_signals(); /* restore signals in child */
         /* if setpgid fails */
         if (setpgid(f, 0) == -1)
         {
@@ -806,11 +833,22 @@ void fork_and_exec(char *argv[], int argv_len, char *in_symbol, char *out_symbol
                 return;
             }
         }
-    
-        // argv[0] = strrchr(argv[0], atoi("/")) + 1; /* find pointer to first non "/" character and store as first element of argv */ // ????
-        
+
+        if (!is_bg) {
+            /* if tcsetpgrp fails */
+            if (tcsetpgrp(STDIN_FILENO, getpgid(0)) == -1)
+            {
+                perror("tcsetpgrp");
+                return;
+            }
+        }
+        restore_signals(); /* restore signals in child */
+
+        /* find pointer to first non "/" character after the last "/" and store as first element of argv */ 
+        strcpy(path, argv[0]);
+        argv[0] = strrchr(argv[0], '/') + 1;
         /* if execv fails */
-        if (execv(argv[0], argv) == -1)
+        if (execv(path, argv) == -1)
         {
             perror("execv");
             return;
@@ -819,7 +857,7 @@ void fork_and_exec(char *argv[], int argv_len, char *in_symbol, char *out_symbol
     /* if child is background process */
     if (is_bg)
     {
-        if (add_job(j_list, j_cnt, f, RUNNING, argv[0]) == -1) 
+        if (add_job(j_list, j_cnt, f, RUNNING, path) == -1) 
         {
             fprintf(stderr, "%s\n", "ERROR : add_job failed.");
             if (fflush(stdout) < 0) 
@@ -841,14 +879,14 @@ void fork_and_exec(char *argv[], int argv_len, char *in_symbol, char *out_symbol
         /* if process is terminated by unhandled signal */
         if (WIFSIGNALED(status))
         {
-            printf("[%d] (%d) terminated by signal %d\n", j_cnt, f, WTERMSIG(status));
+            printf("[%d] (%d) terminated by signal %d\n", j_cnt, w, WTERMSIG(status));
         }
         /* if process is stopped */
         if (WIFSTOPPED(status))
         {
-            printf("[%d] (%d) suspended with exit status %d\n", j_cnt, f, WSTOPSIG(status));
+            printf("[%d] (%d) suspended by signal %d\n", j_cnt, w, WSTOPSIG(status));
             /* if add_job fails */
-            if (add_job(j_list, j_cnt, w, STOPPED, argv[0]) == -1)
+            if (add_job(j_list, j_cnt, w, STOPPED, path) == -1)
             {
                 fprintf(stderr, "%s\n", "ERROR : add_job failed.");
                 /* if fflush fails */
@@ -860,7 +898,7 @@ void fork_and_exec(char *argv[], int argv_len, char *in_symbol, char *out_symbol
             j_cnt++;
         }
         /* if tcsetpgrp fails */
-        if (tcsetpgrp(STDIN_FILENO, getpgid(0)) == -1) // getpgrp ???
+        if (tcsetpgrp(STDIN_FILENO, getpgid(0)) == -1) 
         {
             perror("tcsetpgrp");
             return;

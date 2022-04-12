@@ -29,8 +29,6 @@ SHELL_DICT = {
 
 # PASS_MSG = color("PASS", fg="green")
 # FAIL_MSG = color("FAIL", fg="red")
-PASS_MSG = "PASS"
-FAIL_MSG = "FAIL"
 
 
 class TraceInstruction:
@@ -66,17 +64,13 @@ class SignalInstruction(TraceInstruction):
 
 
 class SleepInstruction(TraceInstruction):
-    def __init__(self, s, quick):
+    def __init__(self, s):
         self.s = s
-        self.quick = quick 
 
     def run(self, shell_proc):
 	# to speed things up, sleep for just a quarter of the time requested
         stime = self.s*0.25
-        if self.quick:
-            time.sleep(stime)
-        else:
-            time.sleep(self.s)
+        time.sleep(stime)
 
     def __str__(self):
         return f"<Sleep {self.s}>"
@@ -132,7 +126,7 @@ def parse_trace_file(path: str, args) -> Tuple[List[TraceInstruction], bool]:
 
             slp = re.findall("SLEEP (\d+)", line)
             if len(slp) > 0:
-                instructions.append(SleepInstruction(int(slp[0]), args.quick))
+                instructions.append(SleepInstruction(int(slp[0])))
             elif line == "INT":
                 instructions.append(SignalInstruction(signal.SIGINT))
             elif line == "TSTP":
@@ -189,6 +183,7 @@ class TraceResult:
         line_len = self.get_output_line_len(section_type)
         # section = color(f"{title}:{line_len}\n", style="bold+underline")
         section = f"{title}:{line_len}\n"
+
 
         if section_type == "TRACE":
             section += "".join(self.trace.lines)
